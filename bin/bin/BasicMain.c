@@ -7,7 +7,7 @@
 #define HEIGHT       (512)
 #define RGB	         (3)
 #define TWO_PI       (6.28318530718f)
-#define SAMPLE_COUNT (64)
+#define LIGHT_COUNT (64)
 #define MAX_STEP     (10)
 #define MAX_DISTANCE (2.0f)
 #define EPSILON      (1e-6f)
@@ -18,19 +18,25 @@
 
 #define LIGHT_NORMAL_STRENGTH (2.0f) //
 
-#define COLOR_WHITE (255.0f)
-#define COLOR_BLACK (0.0f)
+#define COLOR_WHITE (0.0f)
+#define COLOR_BLACK (255.0f)
 
 typedef unsigned char byte;
-
-
-
-
 byte image[WIDTH * HEIGHT * RGB];
 
 
-float Sample(float x, float y);
-float CircleSDF(float x, float y, float cx, float cy, float radius);
+//测定坐标为(x,y)的点被光照射的颜色值
+float Lighting(float x, float y);
+
+
+//任意点(x,y)距离发光圆盘Circle(cx,cy,radius)的符号距离场
+//1.SDF < 0 点在场景形状内,距离最近的形状边界距离为SDF
+//2.SDF = 0 点在场景形状内
+//3.SDF > 0 点在场景形状外
+float CircleSDF(float x, float y, float cx, float cy, float radius); 
+
+
+//简单光线追踪
 float Trace(float ox, float oy, float dx, float dy);
 
 int main()
@@ -41,27 +47,27 @@ int main()
 	{
 		for (int x = 0; x < WIDTH; ++x)
 		{
-			float sampleColor = Sample( (float)x / WIDTH, (float)y / HEIGHT) * COLOR_WHITE;
-			p[0] = p[1] = p[2] = (int)(fminf(sampleColor, COLOR_WHITE));
+			float color = Lighting( (float)x / WIDTH, (float)y / HEIGHT) * COLOR_BLACK;
+			p[0] = p[1] = p[2] = (int)(fminf(color, COLOR_BLACK));
 			p += RGB;
 		}
 	}
 
-	FILE* fp = fopen("..//..//png//basic_light.png", "wb");
+	FILE* fp = fopen("..//..//png//basic_light_stratified.png", "wb");
 	svpng(fp, WIDTH, HEIGHT, image, 0);
 	printf("Svnpng Success\n");
 	return 0;
 }
 
-float Sample(float x, float y)
+float Lighting(float x, float y)
 {
 	float sum = 0.0f;
-	for (int i = 0; i < SAMPLE_COUNT; ++i)
+	for (int i = 0; i < LIGHT_COUNT; ++i)
 	{
-		float radians = TWO_PI * rand() / RAND_MAX;
+		float radians = TWO_PI * i / LIGHT_COUNT;
 		sum += Trace(x, y, cosf(radians), sinf(radians));
 	}
-	return sum / SAMPLE_COUNT;
+	return sum / LIGHT_COUNT;
 }
 
 float CircleSDF(float x, float y, float cx, float cy, float radius)
