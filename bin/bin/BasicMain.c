@@ -7,7 +7,7 @@
 #define HEIGHT       (512)
 #define RGB	         (3)
 #define TWO_PI       (6.28318530718f)
-#define LIGHT_COUNT (64)
+#define LIGHT_COUNT  (64)
 #define MAX_STEP     (10)
 #define MAX_DISTANCE (2.0f)
 #define EPSILON      (1e-6f)
@@ -53,7 +53,7 @@ int main()
 		}
 	}
 
-	FILE* fp = fopen("..//..//png//basic_light_stratified.png", "wb");
+	FILE* fp = fopen("..//..//png//basic_light.png", "wb");
 	svpng(fp, WIDTH, HEIGHT, image, 0);
 	printf("Svnpng Success\n");
 	return 0;
@@ -64,7 +64,9 @@ float Lighting(float x, float y)
 	float sum = 0.0f;
 	for (int i = 0; i < LIGHT_COUNT; ++i)
 	{
-		float radians = TWO_PI * i / LIGHT_COUNT;
+		//float radians = TWO_PI * rand() / RAND_MAX;                             // 均匀采样
+		//float radians = TWO_PI * i / LIGHT_COUNT;                              // 分层采样
+		float radians = TWO_PI * (i + (float)rand() / RAND_MAX) / LIGHT_COUNT;   // 抖动采样
 		sum += Trace(x, y, cosf(radians), sinf(radians));
 	}
 	return sum / LIGHT_COUNT;
