@@ -18,6 +18,9 @@
 
 #define LIGHT_NORMAL_STRENGTH (2.0f) //
 
+#define COLOR_WHITE (255.0f)
+#define COLOR_BLACK (0.0f)
+
 typedef unsigned char byte;
 
 
@@ -38,12 +41,13 @@ int main()
 	{
 		for (int x = 0; x < WIDTH; ++x)
 		{
-			p[0] = p[1] = p[2] = (int)255.0f;
+			float sampleColor = Sample( (float)x / WIDTH, (float)y / HEIGHT) * COLOR_WHITE;
+			p[0] = p[1] = p[2] = (int)(fminf(sampleColor, COLOR_WHITE));
 			p += RGB;
 		}
 	}
 
-	FILE* fp = fopen("..//..//png//basic.png", "wb");
+	FILE* fp = fopen("..//..//png//basic_light.png", "wb");
 	svpng(fp, WIDTH, HEIGHT, image, 0);
 	printf("Svnpng Success\n");
 	return 0;
@@ -69,17 +73,17 @@ float CircleSDF(float x, float y, float cx, float cy, float radius)
 
 float Trace(float ox, float oy, float dx, float dy)
 {
-	float delta = 0.0f;
+	float t = 0.0f;
 
-	for (int i = 0; i < MAX_STEP && delta < MAX_DISTANCE; ++i)
+	for (int i = 0; i < MAX_STEP && t < MAX_DISTANCE; ++i)
 	{
-		float step = CircleSDF(ox + dx * delta, oy + dy * delta, CIRCLE_CENTRE_X, CIRCLE_CENTRE_Y, CIRCLE_CENTRE_RADIUS);
-		if (step < EPSILON)
+		float sdf = CircleSDF(ox + dx * t, oy + dy * t, CIRCLE_CENTRE_X, CIRCLE_CENTRE_Y, CIRCLE_CENTRE_RADIUS);
+		if (sdf < EPSILON)
 		{
 			return  LIGHT_NORMAL_STRENGTH;
 		}
 
-		delta += step;
+		t += sdf;
 	}
 
 	return 0.0f;
