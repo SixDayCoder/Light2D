@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="BasicMain.c">
+    <ClCompile Include="ShapeMain.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
