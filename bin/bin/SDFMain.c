@@ -42,6 +42,8 @@ float CapsuleSDF(float x, float y, float ax, float ay, float bx, float by, float
 
 float BoxSDF(float x, float y, float ox, float oy, float theta, float sx, float sy);
 
+float TriangleSDF(float x, float y, float ax, float ay, float bx, float by, float cx, float cy);
+
 float Trace(float ox, float oy, float dx, float dy);
 
 
@@ -59,7 +61,7 @@ int main()
 		}
 	}
 
-	FILE* fp = fopen("..//..//png//basic_rounded_box.png", "wb");
+	FILE* fp = fopen("..//..//png//basic_rounded_triangle.png", "wb");
 	svpng(fp, WIDTH, HEIGHT, image, 0);
 	printf("Svnpng Success\n");
 	return 0;
@@ -119,6 +121,16 @@ float BoxSDF(float x, float y, float ox, float oy, float theta, float sx, float 
 	return fminf(fmaxf(dx, dy), 0.0f) + sqrtf(ax * ax + ay * ay);
 }
 
+float TriangleSDF(float x, float y, float ax, float ay, float bx, float by, float cx, float cy)
+{
+	float d = fminf(fminf( SegmentSDF(x, y, ax, ay, bx, by), SegmentSDF(x, y, bx, by, cx, cy)), 
+		                   SegmentSDF(x, y, cx, cy, ax, ay));
+
+	return  (bx - ax) * (y - ay) > (by - ay) * (x - ax) &&
+			(cx - bx) * (y - by) > (cy - by) * (x - bx) &&
+			(ax - cx) * (y - cy) > (ay - cy) * (x - cx) ? -d : d;
+}
+
 float Trace(float ox, float oy, float dx, float dy)
 {
 	float t = 0.0f;
@@ -140,7 +152,8 @@ TraceResult Scene(float x, float y)
 {
 	//TraceResult r = { PlaneSDF(x, y, 0.5f, 0.5f, 0.0f, 1.0f), 0.8f };
 	//TraceResult r = { CapsuleSDF(x, y, 0.4f, 0.4f, 0.6f, 0.6f, 0.1f), 1.0f };
-	TraceResult r = { BoxSDF(x, y, 0.5f, 0.5f, TWO_PI / 16.0f, 0.3f, 0.1f) - 0.1f , 1.0f };
+	//TraceResult r = { BoxSDF(x, y, 0.5f, 0.5f, TWO_PI / 16.0f, 0.3f, 0.1f) - 0.1f , 1.0f };
+	TraceResult r = { TriangleSDF(x, y, 0.5f, 0.2f, 0.8f, 0.8f, 0.3f, 0.6f) - 0.1f, 1.0f };
 
 	return r;
 }
@@ -190,3 +203,9 @@ TraceResult SubtractResult(TraceResult lhs, TraceResult rhs)
 //s是矩形长对角线的一半 由s可知长宽分别为s * cos(theta)和s * sin(theta)
 //首先是将世界坐标系的点p变换到矩形Box所在的坐标系
 //显然可以由一次旋转+位移的操作来完成
+
+//4.计算三角形的SDF
+//三角形的SDF分为两步
+//1.点P到三条线段的最短距离,可以用SegmentSDF判断
+//2.P是在三角形的内部还是外部,如果是在内部那么返回-d否则返回d
+//重点是判断在三角形的内部还是外部
