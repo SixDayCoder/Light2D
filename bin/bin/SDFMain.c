@@ -36,6 +36,10 @@ float CircleSDF(float x, float y, float cx, float cy, float radius);
 
 float PlaneSDF(float x, float y, float px, float py, float nx, float ny);
 
+float SegmentSDF(float x, float y, float ax, float ay, float bx, float by);
+
+float CapsuleSDF(float x, float y, float ax, float ay, float bx, float by, float radius);
+
 float Trace(float ox, float oy, float dx, float dy);
 
 
@@ -53,7 +57,7 @@ int main()
 		}
 	}
 
-	FILE* fp = fopen("..//..//png//basic_plane.png", "wb");
+	FILE* fp = fopen("..//..//png//basic_capsule.png", "wb");
 	svpng(fp, WIDTH, HEIGHT, image, 0);
 	printf("Svnpng Success\n");
 	return 0;
@@ -82,6 +86,22 @@ float PlaneSDF(float x, float y, float px, float py, float nx, float ny)
 	return (x - px) * nx + (y - py) * ny;
 }
 
+float SegmentSDF(float x, float y, float ax, float ay, float bx, float by)
+{
+	float vx = x - ax,  vy = y - ay;
+	float ux = bx - ax, uy = by - ay;
+	float dot = vx * ux + vy * uy;
+	float t = fmaxf(fminf( dot / (ux * ux + uy * uy), 1.0f), 0.0f);
+	float dx = vx - ux * t, dy = vy - uy * t;
+
+	return sqrtf(dx * dx + dy * dy);
+}
+
+float CapsuleSDF(float x, float y, float ax, float ay, float bx, float by, float radius)
+{
+	return SegmentSDF(x, y, ax, ay, bx, by) - radius;
+}
+
 float Trace(float ox, float oy, float dx, float dy)
 {
 	float t = 0.0f;
@@ -101,8 +121,8 @@ float Trace(float ox, float oy, float dx, float dy)
 
 TraceResult Scene(float x, float y)
 {
-	TraceResult r = { PlaneSDF(x, y, 0.0f, 0.5f, 0.0f, 1.0f), 0.8f };
-
+	//TraceResult r = { PlaneSDF(x, y, 0.5f, 0.5f, 0.0f, 1.0f), 0.8f };
+	TraceResult r = { CapsuleSDF(x, y, 0.4f, 0.4f, 0.6f, 0.6f, 0.1f), 1.0f };
 	return r;
 }
 
@@ -129,3 +149,17 @@ TraceResult SubtractResult(TraceResult lhs, TraceResult rhs)
 	return r;
 }
 
+
+//DOC
+
+//1.计算Plane的SDF
+//这里的Plane只的是一个二维的超平面,在二维空间的表现是一条直线,将二维空间划分为两部分
+//点X(x,y)到Plane的SDF定义为
+//SDF(x) = Dot( (X-P), Normal ) P是Plane上一点,Normal是Plane的单位法向量  => 直线的点法式
+
+//2.计算Capsule的SDF
+//首先我们可以用一组数据a,b,r来描述一个胶囊体
+//a,b是胶囊体的body部分的两端,r是胶囊体圆弧的半径
+//点X(x,y)到Capsule的SDF定义为
+//SDF(X) = Dist(x, segment(a,b)) - radius
+//关键是计算X到线段ab的距离
