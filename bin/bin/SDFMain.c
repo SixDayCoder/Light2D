@@ -40,6 +40,8 @@ float SegmentSDF(float x, float y, float ax, float ay, float bx, float by);
 
 float CapsuleSDF(float x, float y, float ax, float ay, float bx, float by, float radius);
 
+float BoxSDF(float x, float y, float ox, float oy, float theta, float sx, float sy);
+
 float Trace(float ox, float oy, float dx, float dy);
 
 
@@ -57,7 +59,7 @@ int main()
 		}
 	}
 
-	FILE* fp = fopen("..//..//png//basic_capsule.png", "wb");
+	FILE* fp = fopen("..//..//png//basic_rounded_box.png", "wb");
 	svpng(fp, WIDTH, HEIGHT, image, 0);
 	printf("Svnpng Success\n");
 	return 0;
@@ -102,6 +104,21 @@ float CapsuleSDF(float x, float y, float ax, float ay, float bx, float by, float
 	return SegmentSDF(x, y, ax, ay, bx, by) - radius;
 }
 
+float BoxSDF(float x, float y, float ox, float oy, float theta, float sx, float sy)
+{
+	float costheta = cosf(theta);
+	float sintheta = sinf(theta);
+
+	//坐标变换,变换到Box的局部坐标系下 ： 旋转+平移
+	float dx = fabsf((x - ox) * costheta + (y - oy) * sintheta) - sx;
+	float dy = fabsf((y - oy) * costheta - (x - ox) * sintheta) - sy;
+
+	float ax = fmaxf(dx, 0.0f);
+	float ay = fmaxf(dy, 0.0f);
+
+	return fminf(fmaxf(dx, dy), 0.0f) + sqrtf(ax * ax + ay * ay);
+}
+
 float Trace(float ox, float oy, float dx, float dy)
 {
 	float t = 0.0f;
@@ -122,7 +139,9 @@ float Trace(float ox, float oy, float dx, float dy)
 TraceResult Scene(float x, float y)
 {
 	//TraceResult r = { PlaneSDF(x, y, 0.5f, 0.5f, 0.0f, 1.0f), 0.8f };
-	TraceResult r = { CapsuleSDF(x, y, 0.4f, 0.4f, 0.6f, 0.6f, 0.1f), 1.0f };
+	//TraceResult r = { CapsuleSDF(x, y, 0.4f, 0.4f, 0.6f, 0.6f, 0.1f), 1.0f };
+	TraceResult r = { BoxSDF(x, y, 0.5f, 0.5f, TWO_PI / 16.0f, 0.3f, 0.1f) - 0.1f , 1.0f };
+
 	return r;
 }
 
@@ -163,3 +182,11 @@ TraceResult SubtractResult(TraceResult lhs, TraceResult rhs)
 //点X(x,y)到Capsule的SDF定义为
 //SDF(X) = Dist(x, segment(a,b)) - radius
 //关键是计算X到线段ab的距离
+
+//3.计算矩形的SDF
+//首先我们用一组数据o,theta,s来表示
+//o是矩形原点
+//theta是旋转角(正向旋转)
+//s是矩形长对角线的一半 由s可知长宽分别为s * cos(theta)和s * sin(theta)
+//首先是将世界坐标系的点p变换到矩形Box所在的坐标系
+//显然可以由一次旋转+位移的操作来完成
