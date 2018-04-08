@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ReflectMain.c">
+    <ClCompile Include="RefractMain.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
