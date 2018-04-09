@@ -8,22 +8,50 @@
 #define HEIGHT                    (512)
 #define RGB	                      (3)
 #define TWO_PI                    (6.28318530718f)
-#define LIGHT_COUNT               (64)
+#define LIGHT_COUNT               (256)
 
 
 #define RAY_MARCHING_MAX_STEP     (64)
 #define RAY_MARCHING_MAX_DISTANCE (5.0f)
-#define RAY_MAX_TRACE_STEP    (3)
+#define RAY_MAX_TRACE_STEP    (5)
 #define RAY_BIAS (1e-4f)
 
 #define COLOR_WHITE (0.0f)
-#define COLOR_BLACK (255.0f)
 
 #define REFRACT (1)  //折射
 #define TOTAL_REFLECT (0) //全反射
 
+#define COLOR_BLACK {0.0f, 0.0f, 0.0f}
+
 typedef unsigned char byte;
-typedef struct { float sdf, emissive, reflectivity, eta, absorption; } TraceResult;
+typedef struct { float r, g, b; } Color;
+typedef struct 
+{ 
+	float sdf, reflectivity, eta;
+	Color emissive, absorption;
+}  TraceResult;
+
+
+Color ColorAdd(Color lhs, Color rhs)
+{
+	Color c = { lhs.r + rhs.r, lhs.g + rhs.g, lhs.b + rhs.b };
+	return c;
+}
+
+Color ColorMultiply(Color lhs, Color rhs)
+{
+	Color c = { lhs.r * rhs.r, lhs.g * rhs.g, lhs.b * rhs.b };
+	return c;
+}
+
+Color ColorScale(Color c, float scale)
+{
+	c.r *= scale;
+	c.g *= scale;
+	c.b *= scale;
+
+	return c;
+}
 
 byte image[WIDTH * HEIGHT * RGB];
 
@@ -35,7 +63,7 @@ TraceResult Intersec(TraceResult lhs, TraceResult rhs);
 
 TraceResult Subtract(TraceResult lhs, TraceResult rhs);
 
-float Lighting(float x, float y);
+Color Sample(float x, float y);
 
 float CircleSDF(float x, float y, float cx, float cy, float radius);
 
@@ -49,7 +77,9 @@ float BoxSDF(float x, float y, float ox, float oy, float theta, float sx, float 
 
 float TriangleSDF(float x, float y, float ax, float ay, float bx, float by, float cx, float cy);
 
-float Trace(float ox, float oy, float dx, float dy, int depth);
+float NgonSDF(float x, float y, float cx, float cy, float r, float n);
+
+Color Trace(float ox, float oy, float dx, float dy, int depth);
 
 void Reflect(float ix, float iy, float nx, float ny, float* rx, float* ry);
 
@@ -59,7 +89,7 @@ void Gradient(float x, float y, float* nx, float* ny);
 
 float Fresnel(float cosi, float cost, float etai, float etat);//菲涅尔反射方程,计算反射比
 
-float BeerLambert(float a, float d);
+Color BeerLambert(Color a, float d);
 
 int main()
 {
@@ -69,27 +99,29 @@ int main()
 	{
 		for (int x = 0; x < WIDTH; ++x)
 		{
-			float color = Lighting((float)x / WIDTH, (float)y / HEIGHT) * COLOR_BLACK;
-			p[0] = p[1] = p[2] = (int)(fminf(color, COLOR_BLACK));
+			Color c = Sample((float)x / WIDTH, (float)y / HEIGHT);
+			p[0] = (int)(fminf(c.r * 255.0f, 255.0f));
+			p[1] = (int)(fminf(c.g * 255.0f, 255.0f));
+			p[2] = (int)(fminf(c.b * 255.0f, 255.0f));
 			p += RGB;
 		}
 	}
 
-	FILE* fp = fopen("..//..//png//basic_beer_lambert.png", "wb");
+	FILE* fp = fopen("..//..//png//basic_beer_lambert_color.png", "wb");
 	svpng(fp, WIDTH, HEIGHT, image, 0);
 	printf("Svnpng Success\n");
 	return 0;
 }
 
-float Lighting(float x, float y)
+Color Sample(float x, float y)
 {
-	float sum = 0.0f;
+	Color sum = COLOR_BLACK;
 	for (int i = 0; i < LIGHT_COUNT; ++i)
 	{
 		float radians = TWO_PI * (i + (float)rand() / RAND_MAX) / LIGHT_COUNT;   // 抖动采样
-		sum += Trace(x, y, cosf(radians), sinf(radians), 0);
+		sum = ColorAdd(sum, Trace(x, y, cosf(radians), sinf(radians), 0));
 	}
-	return sum / LIGHT_COUNT;
+	return ColorScale(sum, 1.0f / LIGHT_COUNT);
 }
 
 float CircleSDF(float x, float y, float cx, float cy, float radius)
@@ -145,7 +177,15 @@ float TriangleSDF(float x, float y, float ax, float ay, float bx, float by, floa
 		(ax - cx) * (y - cy) > (ay - cy) * (x - cx) ? -d : d;
 }
 
-float Trace(float ox, float oy, float dx, float dy, int depth)
+float NgonSDF(float x, float y, float cx, float cy, float r, float n)
+{
+	float ux = x - cx, uy = y - cy, a = TWO_PI / n;
+	float t = fmodf(atan2f(uy, ux) + TWO_PI, a), s = sqrtf(ux * ux + uy * uy);
+	return PlaneSDF(s * cosf(t), s * sinf(t), r, 0.0f, cosf(a * 0.5f), sinf(a * 0.5f));
+
+}
+
+Color Trace(float ox, float oy, float dx, float dy, int depth)
 {
 	float t = 1e-3f;
 	float sign = Scene(ox, oy).sdf > 0.0f ? 1.0f : -1.0f;
@@ -157,7 +197,7 @@ float Trace(float ox, float oy, float dx, float dy, int depth)
 		TraceResult r = Scene(x, y);
 		if (r.sdf * sign  < EPSILON) //因为现在是光线在内外部均有可能,所以在光线步进的时候要考虑符号
 		{
-			float sum = r.emissive;
+			Color sum = r.emissive;
 			//SDF该点是可反射或者可折射的,并且Trace的递归次数在要求的范围内
 			if (depth < RAY_MAX_TRACE_STEP && ((r.reflectivity > 0.0f) || (r.eta > 0.0f)))
 			{
@@ -180,7 +220,8 @@ float Trace(float ox, float oy, float dx, float dy, int depth)
 						float cosi = -(dx * nx + dy * ny);
 						float cost = -(rx * nx + ry * ny);
 						reflect = sign < 0.0f ? Fresnel(cosi, cost, r.eta, 1.0f) : Fresnel(cosi, cost, 1.0f, r.eta);
-						sum += (1.0f - reflect) * Trace(x +  nx * RAY_BIAS, y + ny * RAY_BIAS, rx, ry, depth + 1);
+						Color trace = Trace(x +  nx * RAY_BIAS, y + ny * RAY_BIAS, rx, ry, depth + 1);
+						sum = ColorAdd(sum, ColorScale(trace, 1.0f - reflect));
 					}
 					else
 					{
@@ -193,17 +234,19 @@ float Trace(float ox, float oy, float dx, float dy, int depth)
 				{
 					Reflect(dx, dy, nx, ny, &rx, &ry);
 					//这里的reflect考虑到了菲涅尔反射
-					sum += reflect * Trace(x + nx * RAY_BIAS, y + ny * RAY_BIAS, rx, ry, depth + 1);
+					Color trace = Trace(x + nx * RAY_BIAS, y + ny * RAY_BIAS, rx, ry, depth + 1);
+					sum = ColorAdd(sum, ColorScale(trace, reflect));
 				}
 			}
-			return sum * BeerLambert(r.absorption, t);
+			return ColorMultiply(sum, BeerLambert(r.absorption, t));
 		}
 
 		//光线步进考虑光线在形状内还是形状外
 		t += r.sdf * sign;
 	}
 
-	return 0.0f;
+	Color black = COLOR_BLACK;
+	return black;
 }
 
 void Reflect(float ix, float iy, float nx, float ny, float * rx, float * ry)
@@ -244,15 +287,18 @@ float Fresnel(float cosi, float cost, float etai, float etat)
 	return (rs * rs + rp * rp) * 0.5f;
 }
 
-float BeerLambert(float a, float d)
+Color BeerLambert(Color a, float d)
 {
-	return expf(-a * d);
+	Color c = { expf(-a.r * d), expf(-a.g * d), expf(-a.b * d) };
+	return c;
 }
 
 TraceResult Scene(float x, float y)
 {
-	TraceResult a = { CircleSDF(x, y, -0.2f, -0.2f, 0.1f), 10.0f, 0.0f, 0.0f, 0.0f };
-	TraceResult b = { BoxSDF(x, y, 0.5f, 0.5f, 0.0f, 0.3f, 0.2f), 0.0f, 0.2f, 1.5f, 4.0f };
+	TraceResult a = { CircleSDF(x, y, 0.5f, -0.2f, 0.1f), 0.0f, 0.0f,{ 10.0f, 10.0f, 10.0f }, COLOR_BLACK };
+	//b的absorption的rgb是(4,4,1),表示尽量吸收rg,最后显示出来的颜色是蓝色
+	TraceResult b = { NgonSDF(x, y, 0.5f, 0.5f, 0.25f, 5.0f), 0.0f, 1.5f, COLOR_BLACK,  { 4.0f, 4.0f, 1.0f } };
+
 
 	return Union(a, b);
 }
@@ -264,8 +310,8 @@ TraceResult Union(TraceResult lhs, TraceResult rhs)
 
 TraceResult Intersec(TraceResult lhs, TraceResult rhs)
 {
-	TraceResult r;
-	float emissive = lhs.sdf > rhs.sdf ? lhs.emissive : rhs.emissive;
+	TraceResult r = lhs;
+	Color emissive = lhs.sdf > rhs.sdf ? lhs.emissive : rhs.emissive;
 	float sdf = lhs.sdf > rhs.sdf ? lhs.sdf : rhs.sdf;
 
 	r.emissive = emissive;
